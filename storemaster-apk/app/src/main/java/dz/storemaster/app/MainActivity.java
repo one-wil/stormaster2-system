@@ -32,7 +32,9 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4817;
     private static final int CREATE_JSON_REQUEST = 4818;
-    private WebView webView;\n    private FrameLayout rootLayout;\n    private View splashOverlay;
+    private WebView webView;
+    private FrameLayout rootLayout;
+    private View splashOverlay;
     private ValueCallback<Uri[]> filePathCallback;
     private String pendingJsonContent;
 
