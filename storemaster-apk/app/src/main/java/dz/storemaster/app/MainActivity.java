@@ -21,6 +21,8 @@ import android.widget.TextView;
 import android.view.Gravity;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.Typeface;
@@ -105,6 +107,8 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
         portrait.setScaleType(ImageView.ScaleType.CENTER_CROP);
         portrait.setAlpha(0.0f);
+        portrait.setScaleX(1.10f);
+        portrait.setScaleY(1.10f);
         splash.addView(portrait, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -120,8 +124,10 @@ public class MainActivity extends Activity {
         title.setTextSize(27);
         title.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         title.setGravity(Gravity.CENTER);
-        title.setShadowLayer(18, 0, 0, 0xFFFFC857);
+        title.setShadowLayer(24, 0, 0, 0xFFFFC857);
         title.setAlpha(0f);
+        title.setScaleX(0.82f);
+        title.setScaleY(0.82f);
         FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         tp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
@@ -134,42 +140,83 @@ public class MainActivity extends Activity {
         manager.setTextSize(18);
         manager.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         manager.setGravity(Gravity.CENTER);
-        manager.setShadowLayer(14, 0, 0, 0xFF4AB7FF);
+        manager.setShadowLayer(20, 0, 0, 0xFF4AB7FF);
         manager.setAlpha(0f);
+        manager.setScaleX(0.88f);
+        manager.setScaleY(0.88f);
         FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         mp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
         mp.leftMargin = 12; mp.rightMargin = 12; mp.topMargin = 42;
         splash.addView(manager, mp);
 
+        // Rocket and animated vapor trail.
         TextView rocket = new TextView(this);
         rocket.setText("🚀");
-        rocket.setTextSize(46);
+        rocket.setTextSize(54);
         rocket.setGravity(Gravity.CENTER);
         rocket.setAlpha(0f);
-        FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(110, 100);
+        FrameLayout.LayoutParams rp = new FrameLayout.LayoutParams(120, 110);
         rp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        rp.bottomMargin = 28;
+        rp.bottomMargin = 24;
         splash.addView(rocket, rp);
+
+        View vapor1 = makeVapor(0x99D7E8F5, 30);
+        View vapor2 = makeVapor(0x77C4D9EA, 22);
+        View vapor3 = makeVapor(0x66FFFFFF, 16);
+        FrameLayout.LayoutParams vp1 = new FrameLayout.LayoutParams(30, 30);
+        FrameLayout.LayoutParams vp2 = new FrameLayout.LayoutParams(22, 22);
+        FrameLayout.LayoutParams vp3 = new FrameLayout.LayoutParams(16, 16);
+        vp1.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL; vp1.bottomMargin = 105; vp1.leftMargin = -22;
+        vp2.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL; vp2.bottomMargin = 92; vp2.leftMargin = 20;
+        vp3.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL; vp3.bottomMargin = 80; vp3.leftMargin = -5;
+        vapor1.setAlpha(0f); vapor2.setAlpha(0f); vapor3.setAlpha(0f);
+        splash.addView(vapor1, vp1); splash.addView(vapor2, vp2); splash.addView(vapor3, vp3);
 
         rootLayout.addView(splash, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        portrait.animate().alpha(1f).setDuration(500).start();
-        title.animate().alpha(1f).scaleX(1.06f).scaleY(1.06f).setStartDelay(350).setDuration(850).start();
-        manager.animate().alpha(1f).setStartDelay(800).setDuration(700).start();
+        splash.bringToFront();
+        splash.setElevation(1000f);
+
+        // Cinematic entrance: slow portrait zoom, bright title and manager line.
+        portrait.animate().alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(1100).setInterpolator(new DecelerateInterpolator()).start();
+        title.animate().alpha(1f).scaleX(1.04f).scaleY(1.04f)
+                .setStartDelay(450).setDuration(1000).setInterpolator(new DecelerateInterpolator()).start();
+        manager.animate().alpha(1f).scaleX(1f).scaleY(1f)
+                .setStartDelay(1050).setDuration(850).setInterpolator(new DecelerateInterpolator()).start();
+
+        // Pulsing glow while the branding is visible.
+        title.animate().alpha(0.72f).setStartDelay(1550).setDuration(420)
+                .withEndAction(() -> title.animate().alpha(1f).setDuration(420).start()).start();
+        manager.animate().alpha(0.72f).setStartDelay(1750).setDuration(420)
+                .withEndAction(() -> manager.animate().alpha(1f).setDuration(420).start()).start();
 
         new Handler().postDelayed(() -> {
-            title.animate().alpha(0f).translationY(-90f).setDuration(500).start();
-            manager.animate().alpha(0f).translationY(-70f).setDuration(450).start();
+            title.animate().alpha(0f).translationY(-100f).scaleX(1.25f).scaleY(1.25f).setDuration(500).start();
+            manager.animate().alpha(0f).translationY(-75f).setDuration(450).start();
             rocket.setAlpha(1f);
-            rocket.animate().translationY(-850f).alpha(0f).setDuration(1050)
+            vapor1.setAlpha(0.9f); vapor2.setAlpha(0.8f); vapor3.setAlpha(0.7f);
+            vapor1.animate().translationY(-125f).translationX(-28f).alpha(0f).setDuration(850).start();
+            vapor2.animate().translationY(-95f).translationX(25f).alpha(0f).setStartDelay(100).setDuration(800).start();
+            vapor3.animate().translationY(-145f).translationX(4f).alpha(0f).setStartDelay(180).setDuration(900).start();
+            rocket.animate().translationY(-1050f).scaleX(0.72f).scaleY(0.72f).alpha(0f).setDuration(1450)
                     .setInterpolator(new AccelerateInterpolator()).withEndAction(() -> {
                         if (rootLayout != null && splashOverlay != null) {
                             rootLayout.removeView(splashOverlay);
                             splashOverlay = null;
                         }
                     }).start();
-        }, 2450);
+        }, 3600);
+    }
+
+    private View makeVapor(int color, int size) {
+        View puff = new View(this);
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.OVAL);
+        shape.setColor(color);
+        puff.setBackground(shape);
+        return puff;
     }
 
     private class AndroidStoreMasterBridge {
