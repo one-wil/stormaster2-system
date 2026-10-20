@@ -98,6 +98,8 @@ body { zoom: 0.55; }
  <div class="card"><h3>🔐 Connexion au Worker</h3><div class="formgrid"><div class="field full"><label>URL du Worker</label><input id="workerUrl" placeholder="https://votre-worker.workers.dev"></div><div class="field full"><label>MASTER_API_KEY</label><input id="masterKey" type="password" placeholder="Clé administrateur"></div></div><div class="modalfoot"><button class="btn primary" onclick="saveSettings()">💾 Enregistrer</button><button class="btn gold" onclick="testWorker()">🔌 Tester la connexion</button></div><div class="statusline connection"><span class="dot" id="connDot"></span><span id="connText">Non testé</span></div><p class="note">La clé est utilisée uniquement pour communiquer avec votre Worker. Elle n'est jamais envoyée à GitHub ou Cloudflare directement.</p></div>
  <div class="card"><h3>💾 مزامنة بيانات GitHub</h3><button class="btn primary" id="saveGitHubDataBtn" onclick="saveDataToGitHub()">💾 حفظ البيانات</button> <button class="btn gold" id="fetchGitHubDataBtn" onclick="fetchDataFromGitHub()">📥 جلب البيانات من GitHub</button> <button class="btn danger" onclick="resetData()">🗑️ Réinitialiser</button><p class="note" style="margin-top:10px">زر «حفظ البيانات» يرسل أحدث بيانات العملاء والمتاجر إلى Worker ليحدّث ملف البيانات في GitHub بدل النسخة القديمة. زر «جلب البيانات من GitHub» يسترجع الملف المنشور ويستبدل البيانات المحلية به.</p><div class="statusline" id="dataSyncStatus" aria-live="polite"></div></div>
 
+</section>
+
 <section id="cleanup" class="page hidden">
  <div class="top"><div><h2>🧹 تنظيف الموارد</h2><p>إدارة مستودعات GitHub ومشاريع Cloudflare Pages مع رمز سري محفوظ في Cloudflare.</p></div><button class="btn gold" id="scanCleanupBtn" onclick="scanCleanupResources()">🔄 فحص الموارد</button></div>
  <div class="card">
@@ -115,8 +117,6 @@ body { zoom: 0.55; }
   <div class="statusline" id="cleanupStatus" aria-live="polite"></div>
   <div id="cleanupResults"></div>
  </div>
-</section>
-
 </section>
 </main></div>
 
