@@ -38,7 +38,7 @@ body:not(.dashboard-authenticated) .app{display:none!important}
 
 
 <style id="storemaster-zoom-55">
-/* Zoom global à 55 % — conserve le CSS et les fonctionnalités existants */
+/* Zoom global à 55 % */
 body { zoom: 0.55; }
 </style>
 
@@ -182,12 +182,24 @@ document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dat
 function showPage(id){document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));$(id).classList.remove('hidden');document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===id));renderAll()}
 function renderAll(){renderStats();renderClients();renderStores();renderTemplates();renderSelects()}
 function renderStats(){$('statClients').textContent=db.clients.length;$('statStores').textContent=db.stores.length;$('statActive').textContent=db.stores.filter(s=>effectiveStoreStatus(s)==='Active').length;let rs=[...db.stores].slice(-5).reverse();$('recentStores').innerHTML=rs.length?`<table><tr><th>Boutique</th><th>Statut</th><th>Cloudflare</th></tr>${rs.map(s=>`<tr><td>${esc(s.name)}</td><td>${statusBadge(s.status)}</td><td>${s.cloudflare?.url?`<a target="_blank" href="${esc(canonicalPagesUrl(s.cloudflare.url))}">Ouvrir</a>`:'—'}</td></tr>`).join('')}</table>`:'<div class="empty">Aucune boutique.</div>';$('statWorker').textContent=settings.workerUrl?'Configuré':'—'}
-function renderClients(q=''){q=q.toLowerCase();let a=db.clients.filter(c=>(c.name+c.email+c.phone).toLowerCase().includes(q));$('clientsTable').innerHTML=a.length?`<table><tr><th>Client</th><th>Email</th><th>Boutiques</th><th></th></tr>${a.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.email||'-')}</td><td>${db.stores.filter(s=>s.clientId===c.id).length}</td><td><button class="mini" onclick="editClient('${c.id}')">✏️</button></td></tr>`).join('')}</table>`:'<div class="empty">Aucun client.</div>'}
+function renderClients(q=''){q=q.toLowerCase();let a=db.clients.filter(c=>(c.name+c.email+c.phone).toLowerCase().includes(q));$('clientsTable').innerHTML=a.length?`<table><tr><th>Client</th><th>Email</th><th>Boutiques</th><th></th></tr>${a.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.email||'-')}</td><td>${db.stores.filter(s=>s.clientId===c.id).length}</td><td><div class="actions"><button class="mini" title="Modifier le client" onclick="editClient('${c.id}')">✏️</button><button class="mini danger" title="Supprimer le client" onclick="deleteClient('${c.id}')">🗑️</button></div></td></tr>`).join('')}</table>`:'<div class="empty">Aucun client.</div>'}
 function renderStores(q=''){q=q.toLowerCase();let a=db.stores.filter(s=>(s.name+s.repo+s.template).toLowerCase().includes(q));$('storesTable').innerHTML=a.length?`<table><tr><th>Boutique</th><th class="hideMob">Repository</th><th>Cloudflare</th><th>Expiration</th><th>Actions</th><th>Statut</th></tr>${a.map(s=>`<tr><td><b>${esc(s.name)}</b></td><td class="hideMob">${esc(s.repo||'—')}</td><td>${s.cloudflare?.url?`<a target="_blank" href="${esc(canonicalPagesUrl(s.cloudflare.url))}">pages.dev</a>`:'—'}</td><td>${expiryLabel(s)}</td><td><div class="actions"><button class="mini" title="Créer et ouvrir le lien de partage" onclick="shareStore('${s.id}')">👁️</button><button class="mini" title="Vérifier Cloudflare" onclick="checkCloudflare('${s.id}')">☁️</button></div></td><td>${statusBadge(s)}</td></tr>`).join('')}</table>`:'<div class="empty">Aucune boutique.</div>'}
 function renderTemplates(){$('templatesGrid').innerHTML=TEMPLATES.map(t=>`<div class="template"><div class="preview">${t.name}</div><div class="body"><h3>${t.name}</h3><p>Template configuré dans Worker V8.1</p><button class="btn primary" onclick="selectTemplate('${t.id}')">Choisir</button></div></div>`).join('')}
 function renderSelects(){let cs=$('cClient');cs.innerHTML='<option value="">-- Choisir un client --</option>'+db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
 function openClient(id=''){let c=db.clients.find(x=>x.id===id);$('clientModalTitle').textContent=c?'Modifier le client':'Nouveau client';$('clientId').value=c?.id||'';$('clientName').value=c?.name||'';$('clientEmail').value=c?.email||'';$('clientPhone').value=c?.phone||'';$('clientStatus').value=c?.status||'Active';$('clientModal').classList.add('show')}
-function editClient(id){openClient(id)}function closeModal(id){$(id).classList.remove('show')}
+function editClient(id){openClient(id)}
+function deleteClient(id){
+  const client=db.clients.find(c=>c.id===id);
+  if(!client)return;
+  const linkedStores=db.stores.filter(s=>s.clientId===id).length;
+  const extra=linkedStores?`\\n\\nتنبيه: لهذا العميل ${linkedStores} متجر/متاجر مرتبطة. ستبقى المتاجر محفوظة ولن تُحذف.`:'';
+  if(!confirm(`هل تريد حذف بيانات العميل «${client.name||''}»؟${extra}\\n\\nسيتم حفظ التغيير في Worker ومزامنته مع GitHub.`))return;
+  db.clients=db.clients.filter(c=>c.id!==id);
+  save(true);
+  renderAll();
+  setDataSyncStatus?.('تم حذف العميل محليًا وإرسال طلب مزامنة إلى Worker. تحقق من GitHub للتأكد من اكتمال الحفظ.',true);
+}
+function closeModal(id){$(id).classList.remove('show')}
 $('clientForm').onsubmit=e=>{e.preventDefault();let id=$('clientId').value;if(id){Object.assign(db.clients.find(x=>x.id===id),{name:$('clientName').value,email:$('clientEmail').value,phone:$('clientPhone').value,status:$('clientStatus').value})}else db.clients.push({id:uid('CL'),name:$('clientName').value,email:$('clientEmail').value,phone:$('clientPhone').value,status:$('clientStatus').value});save(true);closeModal('clientModal');renderAll()}
 function openCreate(){showPage('create')}
 function normalizeRepo(v){return String(v||'').trim().toLowerCase().replace(/[^a-z0-9-_]/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'')}
@@ -285,7 +297,7 @@ function setDataSyncStatus(message,ok=false){
   const el=$('dataSyncStatus');
   if(el){el.textContent=message;el.style.color=ok?'var(--ok)':'var(--danger)';}
 }
-async function saveDataToGitHub(){
+async async function saveDataToGitHub(){
   const btn=$('saveGitHubDataBtn');
   if(!settings.workerUrl||!settings.masterKey){
     setDataSyncStatus('يرجى أولًا حفظ URL العامل ومفتاح MASTER_API_KEY في الإعدادات.');
@@ -320,7 +332,10 @@ async function fetchDataFromGitHub(){
   setDataSyncStatus('جارٍ جلب ملف البيانات المنشور…');
   try{
     let imported=null,source='';
-    const fileUrl=APP_CONFIG.dataFile||'./config.json';
+    const configuredFileUrl=APP_CONFIG.dataFile||'';
+    const fileUrl=(/^https?:\/\//i.test(configuredFileUrl))
+      ? configuredFileUrl
+      : 'https://raw.githubusercontent.com/one-wil/Dashboard-dz/main/config.json';
     try{
       const r=await fetch(fileUrl+(fileUrl.includes('?')?'&':'?')+'_ts='+Date.now(),{cache:'no-store'});
       if(r.ok){
