@@ -297,7 +297,7 @@ function setDataSyncStatus(message,ok=false){
   const el=$('dataSyncStatus');
   if(el){el.textContent=message;el.style.color=ok?'var(--ok)':'var(--danger)';}
 }
-async async function saveDataToGitHub(){
+async function saveDataToGitHub(){
   const btn=$('saveGitHubDataBtn');
   if(!settings.workerUrl||!settings.masterKey){
     setDataSyncStatus('يرجى أولًا حفظ URL العامل ومفتاح MASTER_API_KEY في الإعدادات.');
