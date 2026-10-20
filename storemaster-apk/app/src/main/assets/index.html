@@ -226,7 +226,10 @@ function openCreate(){showPage('create')}
 function normalizeRepo(v){return String(v||'').trim().toLowerCase().replace(/[^a-z0-9-_]/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'')}
 $('cStore').addEventListener('input',()=>{const normalized=normalizeRepo($('cStore').value);$('cStore').dataset.repository=normalized})
 $('cActivation').value=todayISO();syncCreateSubscriptionDates();$('cPlan').addEventListener('change',syncCreateSubscriptionDates);$('cActivation').addEventListener('change',syncCreateSubscriptionDates);$('cClient').addEventListener('change',syncCreateSubscriptionDates);
-async function api(path,body,method='POST'){if(!settings.workerUrl||!settings.masterKey)throw new Error('Configurez URL Worker et MASTER_API_KEY dans Paramètres.');let r=await fetch(settings.workerUrl.replace(/\/$/,'')+path,{method,headers:{'Content-Type':'application/json','X-Master-Key':settings.masterKey},body:method==='GET'?undefined:JSON.stringify(body||{})});let d;try{d=await r.json()}catch{throw new Error('Réponse Worker invalide')}if(!r.ok||d.success===false)throw new Error(d.error||d.details?.message||d.details||'Erreur Worker');return d}
+async function api(path,body,method='POST'){if(!settings.workerUrl||!settings.masterKey)throw new Error('Configurez URL Worker et MASTER_API_KEY dans Paramètres.');let r=await fetch(settings.workerUrl.replace(/\/$/,'')+path,{method,headers:{'Content-Type':'application/json','X-Master-Key':settings.masterKey},body:method==='GET'?undefined:JSON.stringify(body||{})});let d;try{d=await r.json()}catch{throw new Error('Réponse Worker invalide')}if(!r.ok||d.success===false){
+  const detail = typeof d.details === 'string' ? d.details : (d.details?.message || '');
+  throw new Error([d.error, detail].filter(Boolean).join(' — ') || 'Erreur Worker');
+}return d}
 
 
 let cleanupResources=[];
