@@ -66,6 +66,7 @@ body { zoom: 0.55; }
   <button data-page="templates">🎨 <span>Templates</span></button>
   <button data-page="create">➕ <span>Créer une boutique</span></button>
   <button data-page="settings">⚙️ <span>Paramètres</span></button>
+  <button data-page="cleanup">🧹 <span>تنظيف الموارد</span></button>
  </nav>
  <div class="sidefoot">Worker V8.1 • Cloudflare Pages</div>
 </aside>
@@ -96,6 +97,26 @@ body { zoom: 0.55; }
  <div class="top"><div><h2>⚙️ Paramètres</h2><p>Configuration du Dashboard central.</p></div></div>
  <div class="card"><h3>🔐 Connexion au Worker</h3><div class="formgrid"><div class="field full"><label>URL du Worker</label><input id="workerUrl" placeholder="https://votre-worker.workers.dev"></div><div class="field full"><label>MASTER_API_KEY</label><input id="masterKey" type="password" placeholder="Clé administrateur"></div></div><div class="modalfoot"><button class="btn primary" onclick="saveSettings()">💾 Enregistrer</button><button class="btn gold" onclick="testWorker()">🔌 Tester la connexion</button></div><div class="statusline connection"><span class="dot" id="connDot"></span><span id="connText">Non testé</span></div><p class="note">La clé est utilisée uniquement pour communiquer avec votre Worker. Elle n'est jamais envoyée à GitHub ou Cloudflare directement.</p></div>
  <div class="card"><h3>💾 مزامنة بيانات GitHub</h3><button class="btn primary" id="saveGitHubDataBtn" onclick="saveDataToGitHub()">💾 حفظ البيانات</button> <button class="btn gold" id="fetchGitHubDataBtn" onclick="fetchDataFromGitHub()">📥 جلب البيانات من GitHub</button> <button class="btn danger" onclick="resetData()">🗑️ Réinitialiser</button><p class="note" style="margin-top:10px">زر «حفظ البيانات» يرسل أحدث بيانات العملاء والمتاجر إلى Worker ليحدّث ملف البيانات في GitHub بدل النسخة القديمة. زر «جلب البيانات من GitHub» يسترجع الملف المنشور ويستبدل البيانات المحلية به.</p><div class="statusline" id="dataSyncStatus" aria-live="polite"></div></div>
+
+<section id="cleanup" class="page hidden">
+ <div class="top"><div><h2>🧹 تنظيف الموارد</h2><p>إدارة مستودعات GitHub ومشاريع Cloudflare Pages مع رمز سري محفوظ في Cloudflare.</p></div><button class="btn gold" id="scanCleanupBtn" onclick="scanCleanupResources()">🔄 فحص الموارد</button></div>
+ <div class="card">
+  <h3>⚠️ قبل الحذف</h3>
+  <p class="note">تظهر الموارد المرتبطة بسجلات المتاجر والموارد التي لا يظهر أنها مرتبطة. يمكنك اختيار أي مورد غير محمي يدويًا. الحذف نهائي من الخدمة المحددة، ولا يحذف بيانات العملاء أو سجلات الترخيص في KV.</p>
+  <div class="toolbar"><label><input type="checkbox" id="showOrphansOnly" onchange="renderCleanupResources()"> عرض الموارد القديمة/غير المرتبطة فقط</label><span id="cleanupCount" class="note"></span></div>
+  <div id="cleanupResources"><div class="empty">اضغط «فحص الموارد» لجلب القائمة من GitHub وCloudflare.</div></div>
+  <div class="modalfoot"><button class="btn primary" id="requestCleanupCodeBtn" onclick="requestCleanupCode()">🔐 المتابعة إلى التحقق</button></div>
+  <div id="cleanupCodePanel" class="card hidden" style="margin-top:16px;background:#fffaf0">
+   <h3>🔐 تأكيد الحذف بالرمز السري</h3>
+   <p class="note">أدخل الرمز الذي أنشأته أنت وحفظته في Cloudflare Worker ضمن Secret باسم <b>CLEANUP_DELETE_CODE</b>. لا يُرسل الرمز بالبريد ولا يُخزّن داخل ملف HTML.</p>
+   <div class="formgrid"><div class="field"><label>رمز الحذف السري</label><input id="cleanupCode" type="password" autocomplete="off" maxlength="200" placeholder="أدخل الرمز السري"></div></div>
+   <div class="modalfoot"><button class="btn danger" id="confirmCleanupBtn" onclick="confirmCleanupDelete()">🗑️ تأكيد الحذف النهائي</button><button class="btn light" onclick="cancelCleanupCode()">إلغاء</button></div>
+  </div>
+  <div class="statusline" id="cleanupStatus" aria-live="polite"></div>
+  <div id="cleanupResults"></div>
+ </div>
+</section>
+
 </section>
 </main></div>
 
@@ -206,6 +227,88 @@ function normalizeRepo(v){return String(v||'').trim().toLowerCase().replace(/[^a
 $('cStore').addEventListener('input',()=>{const normalized=normalizeRepo($('cStore').value);$('cStore').dataset.repository=normalized})
 $('cActivation').value=todayISO();syncCreateSubscriptionDates();$('cPlan').addEventListener('change',syncCreateSubscriptionDates);$('cActivation').addEventListener('change',syncCreateSubscriptionDates);$('cClient').addEventListener('change',syncCreateSubscriptionDates);
 async function api(path,body,method='POST'){if(!settings.workerUrl||!settings.masterKey)throw new Error('Configurez URL Worker et MASTER_API_KEY dans Paramètres.');let r=await fetch(settings.workerUrl.replace(/\/$/,'')+path,{method,headers:{'Content-Type':'application/json','X-Master-Key':settings.masterKey},body:method==='GET'?undefined:JSON.stringify(body||{})});let d;try{d=await r.json()}catch{throw new Error('Réponse Worker invalide')}if(!r.ok||d.success===false)throw new Error(d.error||d.details?.message||d.details||'Erreur Worker');return d}
+
+
+let cleanupResources=[];
+let cleanupRequestId='';
+function cleanupStatus(message,ok=false){
+  const el=$('cleanupStatus');
+  if(el){el.textContent=message;el.style.color=ok?'var(--ok)':'var(--danger)';}
+}
+function renderCleanupResources(){
+  const root=$('cleanupResources');if(!root)return;
+  const onlyOrphans=!!$('showOrphansOnly')?.checked;
+  const rows=cleanupResources.filter(x=>!onlyOrphans||x.orphan);
+  $('cleanupCount').textContent=`${rows.length} مورد معروض`;
+  if(!rows.length){root.innerHTML='<div class="empty">لا توجد موارد في هذه القائمة. اضغط «فحص الموارد» للتحديث.</div>';return;}
+  root.innerHTML=`<div style="overflow:auto"><table><thead><tr><th>اختيار</th><th>الخدمة</th><th>اسم المورد</th><th>الرابط</th><th>الارتباط</th><th>الحالة</th></tr></thead><tbody>${rows.map((r,i)=>{
+    const id=encodeURIComponent(r.type+':'+r.name);
+    const badge=r.orphan?'<span class="badge warn">غير مرتبط</span>':'<span class="badge ok">مرتبط</span>';
+    const protectedText=r.protected?'محمي — لا يمكن حذفه':'قابل للاختيار';
+    return `<tr><td><input class="cleanupPick" type="checkbox" value="${esc(id)}" ${r.protected?'disabled':''} aria-label="اختيار ${esc(r.name)}"></td><td>${r.type==='github'?'GitHub':'Cloudflare Pages'}</td><td><b>${esc(r.name)}</b></td><td>${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener">فتح الرابط</a>`:'—'}</td><td>${badge}</td><td>${esc(protectedText)}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+async function scanCleanupResources(preserveResults=false){
+  const btn=$('scanCleanupBtn');if(btn){btn.disabled=true;btn.textContent='⏳ جارٍ الفحص…';}
+  cleanupStatus('جارٍ جلب قائمة الموارد ومقارنتها ببيانات المتاجر…');
+  try{
+    const d=await api('/api/master/cleanup/scan',{},'GET');
+    cleanupResources=Array.isArray(d.resources)?d.resources:[];
+    renderCleanupResources();
+    if(!preserveResults)$('cleanupResults').innerHTML='';
+    cleanupStatus(`اكتمل الفحص: ${cleanupResources.length} مورد. راجع الأسماء والروابط قبل اختيار أي مورد.`,true);
+  }catch(e){cleanupStatus('تعذر فحص الموارد: '+(e.message||String(e)));}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔄 فحص الموارد';}}
+}
+function selectedCleanupTargets(){
+  return [...document.querySelectorAll('.cleanupPick:checked')].map(el=>{
+    const decoded=decodeURIComponent(el.value);const p=decoded.indexOf(':');
+    return {type:decoded.slice(0,p),name:decoded.slice(p+1)};
+  });
+}
+async function requestCleanupCode(){
+  const targets=selectedCleanupTargets();
+  if(!targets.length){alert('اختر موردًا واحدًا على الأقل، مع التأكد من اسمه ورابطه.');return;}
+  const list=targets.map(t=>`${t.type==='github'?'GitHub':'Cloudflare'}: ${t.name}`).join('\n');
+  if(!confirm(`ستطلب رمز تحقق لحذف الموارد التالية نهائيًا:\n\n${list}\n\nهل تريد المتابعة؟`))return;
+  const btn=$('requestCleanupCodeBtn');if(btn){btn.disabled=true;btn.textContent='⏳ جارٍ الإرسال…';}
+  cleanupStatus('جارٍ تجهيز طلب الحذف والتحقق من إعدادات Worker…');
+  try{
+    const d=await api('/api/master/cleanup/request-code',{targets});
+    cleanupRequestId=d.requestId||'';
+    if(!cleanupRequestId)throw new Error('لم يُرجع Worker معرّف طلب التحقق.');
+    $('cleanupCodePanel').classList.remove('hidden');
+    $('cleanupCode').value='';
+    cleanupStatus('أدخل الرمز السري المحفوظ في Cloudflare لتأكيد الحذف.',true);
+    $('cleanupCode').focus();
+  }catch(e){cleanupStatus('تعذر تجهيز طلب الحذف: '+(e.message||String(e)));}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔐 المتابعة إلى التحقق';}}
+}
+function cancelCleanupCode(){
+  cleanupRequestId='';
+  $('cleanupCodePanel').classList.add('hidden');
+  $('cleanupCode').value='';
+  cleanupStatus('تم إلغاء طلب الحذف. لم تُحذف أي موارد.',true);
+}
+async function confirmCleanupDelete(){
+  const code=$('cleanupCode').value.trim();
+  if(!cleanupRequestId){alert('اطلب رمز تحقق جديدًا أولًا.');return;}
+  if(!code || code.length < 12){alert('أدخل الرمز السري الصحيح (12 حرفًا على الأقل).');return;}
+  const targets=selectedCleanupTargets();
+  if(!confirm(`هذا الإجراء نهائي. سيتم حذف الموارد المحددة التي وافق عليها Worker عند طلب الرمز. هل تؤكد الحذف؟`))return;
+  const btn=$('confirmCleanupBtn');if(btn){btn.disabled=true;btn.textContent='⏳ جارٍ الحذف…';}
+  cleanupStatus('جارٍ التحقق من الرمز وتنفيذ الحذف في الخدمات…');
+  try{
+    const d=await api('/api/master/cleanup/confirm',{requestId:cleanupRequestId,code});
+    cleanupRequestId='';
+    $('cleanupCodePanel').classList.add('hidden');
+    const resultHtml=`<div class="card" style="margin-top:12px"><h3>نتائج عملية التنظيف</h3><ul>${(d.results||[]).map(x=>`<li>${x.success?'✓':'✗'} <b>${esc(x.type==='github'?'GitHub':'Cloudflare Pages')} — ${esc(x.name)}</b>: ${esc(x.message|| (x.success?'تم الحذف':'فشل الحذف'))}</li>`).join('')}</ul></div>`;
+    await scanCleanupResources(true);
+    $('cleanupResults').innerHTML=resultHtml;
+    cleanupStatus(d.allSucceeded?'تم حذف جميع الموارد المحددة بنجاح.':'انتهت العملية؛ راجع نتيجة كل مورد أدناه.',!!d.allSucceeded);
+  }catch(e){cleanupStatus('تعذر تأكيد الحذف: '+(e.message||String(e)));}
+  finally{if(btn){btn.disabled=false;btn.textContent='🗑️ تأكيد الحذف النهائي';}}
+}
 
 const LIVE_STEPS=[['🔎','Validation des données'],['🔐','Création de la licence sécurisée'],['🐙','Création du Repository GitHub'],['📦','Copie du Template'],['☁️','Création du projet Cloudflare Pages'],['🌐','Recherche du lien officiel'],['✨','Finalisation']];
 let liveTimerHandle=null,liveStart=0,liveStepIndex=-1;
